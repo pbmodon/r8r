@@ -1,6 +1,6 @@
 import express from 'express';
 import path from 'path';
-import { simulate, aggregateForTriangles, toTriangleData, TriangleMetric } from './simulation/simulator';
+import { simulate, aggregateForTriangles, toTriangleData, TriangleMetric, SegmentFilter } from './simulation/simulator';
 import { buildTriangle, calculateAgeToAgeFactors, developToUltimate } from './actuarial/triangles';
 import { calculateOnLevelFactors, fitAllTrends } from './actuarial/trends';
 import { calculateIndications } from './actuarial/indications';
@@ -53,11 +53,14 @@ app.post('/api/analyze', (req, res) => {
       trend_to_year: body.trend_to_year ?? 1.5,
     };
 
+    // Segment filter
+    const segmentFilter: SegmentFilter = body.segment_filter || {};
+
     // 1. Simulate
     const simResult = simulate(simConfig);
 
     // 2. Aggregate
-    const aggregated = aggregateForTriangles(simResult.claims);
+    const aggregated = aggregateForTriangles(simResult.claims, segmentFilter);
 
     // 3. Build all triangles + factors
     const metrics: TriangleMetric[] = ['paid', 'incurred', 'paid_severity', 'incurred_severity'];
@@ -128,6 +131,70 @@ app.post('/api/analyze', (req, res) => {
       premium: premiumPerPolicy,
     };
 
+    // 8. Empirical ILF and Deductible analysis from ground-up severities
+    let rawClaims = simResult.raw_claims;
+    // Apply segment filter to raw claims for ILF/IDF analysis
+    if (segmentFilter.state) rawClaims = rawClaims.filter(c => c.state === segmentFilter.state);
+    if (segmentFilter.coverage) rawClaims = rawClaims.filter(c => c.coverage === segmentFilter.coverage);
+    const limitLevels = simResult.config.limits.map(l => l.limit).sort((a, b) => a - b);
+    const baseLimit = limitLevels[0];
+    const deductibleLevels = simResult.config.deductibles.map(d => d.deductible).sort((a, b) => a - b);
+
+    // Compute expected limited losses at each limit level
+    const limitedLosses: Record<number, number> = {};
+    for (const limit of limitLevels) {
+      let totalLimited = 0;
+      for (const c of rawClaims) {
+        totalLimited += Math.min(c.ground_up_severity, limit);
+      }
+      limitedLosses[limit] = totalLimited / rawClaims.length; // avg limited severity
+    }
+    const baseLimitedLoss = limitedLosses[baseLimit];
+    const empiricalIlfs = limitLevels.map(limit => {
+      const cfg = simResult.config.limits.find(l => l.limit === limit);
+      const empirical = baseLimitedLoss > 0 ? limitedLosses[limit] / baseLimitedLoss : 1.0;
+      const current = cfg?.ilf ?? 1.0;
+      return {
+        limit,
+        expected_limited_loss: limitedLosses[limit],
+        ilf: empirical,
+        current_ilf: current,
+        indicated_change: current > 0 ? (empirical / current) - 1 : 0,
+        claim_count: rawClaims.filter(c => c.policy_limit === limit).length,
+        weight: cfg?.weight ?? 0,
+      };
+    });
+
+    // Compute empirical deductible relativities
+    // For each deductible level, compute avg net loss (ground-up minus deductible, floored at 0)
+    const baseDed = deductibleLevels.find(d => {
+      const cfg = simResult.config.deductibles.find(dc => dc.deductible === d);
+      return cfg && cfg.factor === 1.0;
+    }) || deductibleLevels[0];
+    const dedLosses: Record<number, number> = {};
+    for (const ded of deductibleLevels) {
+      let totalNet = 0;
+      for (const c of rawClaims) {
+        totalNet += Math.max(0, c.ground_up_severity - ded);
+      }
+      dedLosses[ded] = totalNet / rawClaims.length;
+    }
+    const baseDedLoss = dedLosses[baseDed];
+    const empiricalDeds = deductibleLevels.map(ded => {
+      const cfg = simResult.config.deductibles.find(d => d.deductible === ded);
+      const empirical = baseDedLoss > 0 ? dedLosses[ded] / baseDedLoss : 1.0;
+      const current = cfg?.factor ?? 1.0;
+      return {
+        deductible: ded,
+        expected_net_loss: dedLosses[ded],
+        factor: empirical,
+        current_factor: current,
+        indicated_change: current > 0 ? (empirical / current) - 1 : 0,
+        claim_count: rawClaims.filter(c => c.deductible === ded).length,
+        weight: cfg?.weight ?? 0,
+      };
+    });
+
     res.json({
       simulation: {
         config: simResult.config,
@@ -143,6 +210,19 @@ app.post('/api/analyze', (req, res) => {
       trend_data: trendData,
       indication_inputs: indicationInputs,
       ldf_method: ldfMethod,
+      ilf_analysis: {
+        base_limit: baseLimit,
+        base_deductible: baseDed,
+        ilfs: empiricalIlfs,
+        deductible_relativities: empiricalDeds,
+        total_claims: rawClaims.length,
+      },
+      segments: {
+        states: simResult.config.states.map(s => s.code),
+        coverages: simResult.config.coverages.map(c => ({ code: c.code, name: c.name })),
+        limits: simResult.config.limits.map(l => l.limit),
+        deductibles: simResult.config.deductibles.map(d => d.deductible),
+      },
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

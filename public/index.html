@@ -43,7 +43,24 @@ body {
 .header h1 { font-size: 20px; font-weight: 700; color: var(--accent); }
 .header .subtitle { color: var(--text-dim); font-size: 12px; }
 
-.layout { display: flex; height: calc(100vh - 57px); }
+.filter-topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.filter-group { display: flex; align-items: center; gap: 6px; }
+.filter-group label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+.filter-group select {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 4px 8px; border-radius: 4px; font-family: var(--font); font-size: 12px;
+}
+.filter-group select:focus { outline: none; border-color: var(--accent); }
+
+.layout { display: flex; height: calc(100vh - 57px - 45px); }
 
 .sidebar {
   width: 320px; min-width: 320px;
@@ -163,6 +180,19 @@ tr.cdf-row td:first-child { color: var(--orange); }
 .toggle-pill:hover { border-color: var(--accent); color: var(--text); }
 .toggle-pill.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 
+.judgmental-input {
+  width: 62px; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); padding: 3px 5px; border-radius: 3px;
+  font-family: var(--font); font-size: 11px; text-align: right;
+}
+.judgmental-input:focus { outline: none; border-color: var(--accent); }
+.judgmental-input::placeholder { color: var(--text-dim); opacity: 0.5; }
+tr.judgmental-row td { padding: 3px 4px; }
+tr.judgmental-row td:first-child { color: var(--accent); font-weight: 700; }
+tr.avg-row { cursor: pointer; }
+.reset-link { font-size: 10px; color: var(--text-dim); cursor: pointer; margin-left: 6px; text-decoration: underline; }
+.reset-link:hover { color: var(--accent); }
+
 .loading-spinner {
   display: inline-block; width: 14px; height: 14px;
   border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
@@ -179,56 +209,21 @@ tr.cdf-row td:first-child { color: var(--orange); }
   <span class="subtitle">Actuarial Analysis Engine — Loss Development, Trends &amp; Rate Indications</span>
 </div>
 
+<!-- Top filter bar -->
+<div class="filter-topbar" id="filterTopbar">
+  <div class="filter-group">
+    <label>State</label>
+    <select id="seg_state" onchange="runAnalysis()"><option value="">All</option><option value="CA">CA</option><option value="TX">TX</option><option value="FL">FL</option><option value="NY">NY</option><option value="IL">IL</option></select>
+  </div>
+  <div class="filter-group">
+    <label>Coverage</label>
+    <select id="seg_coverage" onchange="onCoverageChange();runAnalysis()"><option value="">All</option><option value="BI">BI</option><option value="PD">PD</option><option value="COMP">Comp</option><option value="COLL">Coll</option></select>
+  </div>
+</div>
+
 <div class="layout">
-  <div class="sidebar">
-    <h2>Simulation Parameters</h2>
-    <div class="control-row">
-      <div class="control"><label>Base Year</label><input type="number" id="base_year" value="2015"></div>
-      <div class="control"><label>Years</label><input type="number" id="years" value="10"></div>
-    </div>
-    <div class="control-row">
-      <div class="control"><label>Policy Count</label><input type="number" id="base_policy_count" value="10000"></div>
-      <div class="control"><label>Avg Premium</label><input type="number" id="base_premium_per_policy" value="1200" step="50"></div>
-    </div>
-
-    <h2>Trend Toggles</h2>
-    <div class="control pct-suffix"><label>Frequency Trend (annual)</label><input type="number" id="frequency_trend_annual" value="1.0" step="0.5"></div>
-    <div class="control pct-suffix"><label>Severity Trend (annual)</label><input type="number" id="severity_trend_annual" value="4.0" step="0.5"></div>
-    <div class="control pct-suffix"><label>Premium Drift (annual)</label><input type="number" id="premium_drift_annual" value="2.0" step="0.5"></div>
-    <div class="control pct-suffix"><label>Exposure Growth (annual)</label><input type="number" id="exposure_growth_annual" value="3.0" step="0.5"></div>
-
-    <h2>Severity Distribution</h2>
-    <div class="control-row">
-      <div class="control"><label>Mean Severity</label><input type="number" id="base_severity_mean" value="15000" step="500"></div>
-      <div class="control"><label>CV</label><input type="number" id="severity_cv" value="1.5" step="0.1"></div>
-    </div>
-    <div class="control"><label>Base Frequency</label><input type="number" id="base_frequency" value="0.08" step="0.01"></div>
-
-    <h2>LDF Selection</h2>
-    <div class="control-row">
-      <div class="control"><label>Window</label>
-        <select id="ldf_window"><option value="all" selected>All</option><option value="4">4Q</option><option value="6">6Q</option><option value="8">8Q</option><option value="12">12Q</option><option value="16">16Q</option></select>
-      </div>
-      <div class="control"><label>Type</label>
-        <select id="ldf_type"><option value="volume_weighted" selected>Volume Wtd</option><option value="simple">Simple</option></select>
-      </div>
-    </div>
-    <div class="control-row">
-      <div class="control"><label>Variant</label>
-        <select id="ldf_variant"><option value="straight" selected>Straight</option><option value="hi-lo">Hi-Lo</option></select>
-      </div>
-      <div class="control"><label>Tail Factor</label><input type="number" id="tail_factor" value="1.000" step="0.005"></div>
-    </div>
-
-    <h2>Indication Inputs</h2>
-    <div class="control-row">
-      <div class="control pct-suffix"><label>Expense Ratio</label><input type="number" id="expense_ratio" value="30.0" step="1"></div>
-      <div class="control pct-suffix"><label>Target Profit</label><input type="number" id="target_profit" value="5.0" step="0.5"></div>
-    </div>
-    <div class="control"><label>Trend-to Period (years)</label><input type="number" id="trend_to_year" value="1.5" step="0.5"></div>
-    <div class="control"><label>Seed</label><input type="number" id="seed" value="42"></div>
-
-    <button class="btn" id="runBtn" onclick="runAnalysis()">Run Analysis</button>
+  <div class="sidebar" id="sidebarContent">
+    <!-- Sidebar content rendered dynamically based on active tab -->
   </div>
 
   <div class="main" id="mainContent">
@@ -247,14 +242,16 @@ let chartInstances = {};
 let selectedTrendFits = {}; // track selected fit index per chart section
 let activeLdfMetrics = new Set(['paid', 'incurred']); // which triangles to show on LDF tab
 let activeTrendMetrics = new Set(['loss', 'severity', 'frequency', 'premium']); // which trends to show
+let judgmentalLdfs = {}; // { metric: [null|number, ...] } per-period overrides
+let segmentFilter = {}; // { state, coverage, limit, deductible }
 
-function val(id) { return document.getElementById(id).value; }
+function val(id) { const el = document.getElementById(id); return el ? el.value : (_sidebarValues[id] || ''); }
 function numVal(id) { return parseFloat(val(id)); }
 
 async function runAnalysis() {
+  _saveSidebarValues();
   const btn = document.getElementById('runBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="loading-spinner"></span>Running...';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="loading-spinner"></span>Running...'; }
   const ldfWindow = val('ldf_window');
 
   const body = {
@@ -271,6 +268,10 @@ async function runAnalysis() {
     tail_factor: numVal('tail_factor'),
     expense_ratio: numVal('expense_ratio') / 100, target_profit: numVal('target_profit') / 100,
     trend_to_year: numVal('trend_to_year'),
+    segment_filter: {
+      state: val('seg_state') || undefined,
+      coverage: val('seg_coverage') || undefined,
+    },
   };
 
   try {
@@ -281,9 +282,73 @@ async function runAnalysis() {
   } catch (e) {
     document.getElementById('mainContent').innerHTML = `<div class="empty-state"><h2>Error</h2><p>${e.message}</p></div>`;
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Run Analysis';
+    if (btn) { btn.disabled = false; btn.textContent = 'Run Analysis'; }
   }
+}
+
+// ── Judgmental LDF helpers ──
+function cumulativeProductRTL_js(factors) {
+  const result = new Array(factors.length);
+  let product = 1;
+  for (let i = factors.length - 1; i >= 0; i--) {
+    product *= factors[i];
+    result[i] = product;
+  }
+  return result;
+}
+
+function setJudgmentalLdf(metric, periodIdx, value) {
+  if (!judgmentalLdfs[metric]) judgmentalLdfs[metric] = [];
+  const v = parseFloat(value);
+  judgmentalLdfs[metric][periodIdx] = (value === '' || isNaN(v)) ? null : v;
+  render();
+}
+
+function resetJudgmentalLdf(metric) {
+  judgmentalLdfs[metric] = null;
+  render();
+}
+
+function populateJudgmentalLdf(metric, avgIdx) {
+  const avg = DATA.triangles[metric].factors.averages[avgIdx];
+  if (!avg) return;
+  judgmentalLdfs[metric] = avg.values.map(v => v != null ? v : null);
+  render();
+}
+
+function updateCurrentFactors() {
+  if (!DATA || !DATA.ilf_analysis) return;
+  // Update ILF indicated changes from sidebar inputs
+  for (const row of DATA.ilf_analysis.ilfs) {
+    const el = document.getElementById('current_ilf_' + row.limit);
+    if (el) {
+      const cur = parseFloat(el.value);
+      if (!isNaN(cur) && cur > 0) {
+        row.current_ilf = cur;
+        row.indicated_change = (row.ilf / cur) - 1;
+      }
+    }
+  }
+  // Update IDF indicated changes
+  for (const row of DATA.ilf_analysis.deductible_relativities) {
+    const el = document.getElementById('current_idf_' + row.deductible);
+    if (el) {
+      const cur = parseFloat(el.value);
+      if (!isNaN(cur) && cur > 0) {
+        row.current_factor = cur;
+        row.indicated_change = (row.factor / cur) - 1;
+      }
+    }
+  }
+  // Re-render just the main content (not sidebar, to preserve input focus)
+  destroyCharts();
+  const main = document.getElementById('mainContent');
+  const tabs = ['summary','ldf','trends','ilf','indications'];
+  const tabLabels = { summary:'Summary', ldf:'LDF', trends:'Trends', ilf:'ILF / Deductible', indications:'Indications' };
+  let html = '<div class="tabs">';
+  for (const t of tabs) html += `<button class="tab ${t===activeTab?'active':''}" onclick="switchTab('${t}')">${tabLabels[t]}</button>`;
+  html += '</div><div id="tabContent">' + renderTab(activeTab) + '</div>';
+  main.innerHTML = html;
 }
 
 function selectTrendFit(sectionKey, fitIndex) {
@@ -300,29 +365,180 @@ function destroyCharts() {
   }
 }
 
+function onCoverageChange() {
+  // Coverage selection affects which ILF/IDF tables show
+  if (DATA) render();
+}
+
+function isCoverageLimit() {
+  const cov = val('seg_coverage');
+  return cov === '' || cov === 'BI' || cov === 'PD';
+}
+
+function isCoverageDeductible() {
+  const cov = val('seg_coverage');
+  return cov === '' || cov === 'COMP' || cov === 'COLL';
+}
+
 function render() {
   destroyCharts();
   const main = document.getElementById('mainContent');
-  const tabs = ['summary','ldf','trends','indications'];
-  const tabLabels = { summary:'Summary', ldf:'LDF', trends:'Trends', indications:'Indications' };
+  const tabs = ['summary','ldf','trends','ilf','indications'];
+  const tabLabels = { summary:'Summary', ldf:'LDF', trends:'Trends', ilf:'ILF / Deductible', indications:'Indications' };
 
   let html = '<div class="tabs">';
   for (const t of tabs) html += `<button class="tab ${t===activeTab?'active':''}" onclick="switchTab('${t}')">${tabLabels[t]}</button>`;
   html += '</div><div id="tabContent">' + renderTab(activeTab) + '</div>';
   main.innerHTML = html;
 
+  // Render context-sensitive sidebar
+  renderSidebar();
+
   // After DOM is set, initialize charts if on trends tab
   if (activeTab === 'trends') initTrendCharts();
 }
 
-function switchTab(tab) { activeTab = tab; render(); }
+function switchTab(tab) { _saveSidebarValues(); activeTab = tab; render(); }
 
 function renderTab(tab) {
   if (tab === 'summary') return renderSummary();
   if (tab === 'ldf') return renderLdfTab();
   if (tab === 'trends') return renderTrends();
+  if (tab === 'ilf') return renderIlfTab();
   if (tab === 'indications') return renderIndications();
   return '';
+}
+
+function renderSidebar() {
+  const sb = document.getElementById('sidebarContent');
+  let html = '';
+
+  if (activeTab === 'summary') {
+    html += `
+      <h2>Simulation Parameters</h2>
+      <div class="control-row">
+        <div class="control"><label>Base Year</label><input type="number" id="base_year" value="${_sv('base_year','2015')}"></div>
+        <div class="control"><label>Years</label><input type="number" id="years" value="${_sv('years','10')}"></div>
+      </div>
+      <div class="control-row">
+        <div class="control"><label>Policy Count</label><input type="number" id="base_policy_count" value="${_sv('base_policy_count','10000')}"></div>
+        <div class="control"><label>Avg Premium</label><input type="number" id="base_premium_per_policy" value="${_sv('base_premium_per_policy','1200')}" step="50"></div>
+      </div>
+      <h2>Severity Distribution</h2>
+      <div class="control-row">
+        <div class="control"><label>Mean Severity</label><input type="number" id="base_severity_mean" value="${_sv('base_severity_mean','15000')}" step="500"></div>
+        <div class="control"><label>CV</label><input type="number" id="severity_cv" value="${_sv('severity_cv','1.5')}" step="0.1"></div>
+      </div>
+      <div class="control"><label>Base Frequency</label><input type="number" id="base_frequency" value="${_sv('base_frequency','0.08')}" step="0.01"></div>
+      <h2>Simulation Trends</h2>
+      <div class="control pct-suffix"><label>Frequency Trend</label><input type="number" id="frequency_trend_annual" value="${_sv('frequency_trend_annual','1.0')}" step="0.5"></div>
+      <div class="control pct-suffix"><label>Severity Trend</label><input type="number" id="severity_trend_annual" value="${_sv('severity_trend_annual','4.0')}" step="0.5"></div>
+      <div class="control pct-suffix"><label>Premium Drift</label><input type="number" id="premium_drift_annual" value="${_sv('premium_drift_annual','2.0')}" step="0.5"></div>
+      <div class="control pct-suffix"><label>Exposure Growth</label><input type="number" id="exposure_growth_annual" value="${_sv('exposure_growth_annual','3.0')}" step="0.5"></div>
+      <div class="control"><label>Seed</label><input type="number" id="seed" value="${_sv('seed','42')}"></div>
+      <button class="btn" id="runBtn" onclick="runAnalysis()">Run Analysis</button>`;
+
+  } else if (activeTab === 'ldf') {
+    html += `
+      <h2>LDF Auto-Selection</h2>
+      <div class="control-row">
+        <div class="control"><label>Window</label>
+          <select id="ldf_window">${_opts([['all','All'],['4','4Q'],['6','6Q'],['8','8Q'],['12','12Q'],['16','16Q']], _sv('ldf_window','all'))}</select>
+        </div>
+        <div class="control"><label>Type</label>
+          <select id="ldf_type">${_opts([['volume_weighted','Volume Wtd'],['simple','Simple']], _sv('ldf_type','volume_weighted'))}</select>
+        </div>
+      </div>
+      <div class="control-row">
+        <div class="control"><label>Variant</label>
+          <select id="ldf_variant">${_opts([['straight','Straight'],['hi-lo','Hi-Lo']], _sv('ldf_variant','straight'))}</select>
+        </div>
+        <div class="control"><label>Tail Factor</label><input type="number" id="tail_factor" value="${_sv('tail_factor','1.000')}" step="0.005"></div>
+      </div>
+      <button class="btn" onclick="runAnalysis()" style="margin-top:12px">Re-run with Selection</button>
+      <h2 style="margin-top:24px">Judgmental ATAs</h2>
+      <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Click any averaging row in the factors table, or edit values below. Changes apply to the <strong>Paid</strong> triangle.</p>`;
+    // Render editable ATA inputs for paid triangle
+    if (DATA && DATA.triangles && DATA.triangles.paid) {
+      const fac = DATA.triangles.paid.factors;
+      if (!judgmentalLdfs['paid']) judgmentalLdfs['paid'] = new Array(fac.period_labels.length).fill(null);
+      for (let j = 0; j < fac.period_labels.length; j++) {
+        const ov = judgmentalLdfs['paid'][j];
+        const ph = fac.selected[j] != null ? fac.selected[j].toFixed(4) : '';
+        const v = ov != null ? ov.toFixed(4) : '';
+        html += `<div class="control"><label>${fac.period_labels[j]}</label><input type="number" step="0.001" placeholder="${ph}" value="${v}" onchange="setJudgmentalLdf('paid',${j},this.value)"></div>`;
+      }
+      const hasOv = judgmentalLdfs['paid'].some(x => x != null);
+      if (hasOv) html += `<div style="text-align:right;margin-top:4px"><span class="reset-link" onclick="resetJudgmentalLdf('paid')">Reset all</span></div>`;
+    }
+
+  } else if (activeTab === 'trends') {
+    html += `
+      <h2>Judgmental Trends</h2>
+      <div class="control pct-suffix"><label>Frequency Trend</label><input type="number" id="frequency_trend_annual" value="${_sv('frequency_trend_annual','1.0')}" step="0.5"></div>
+      <div class="control pct-suffix"><label>Severity Trend</label><input type="number" id="severity_trend_annual" value="${_sv('severity_trend_annual','4.0')}" step="0.5"></div>
+      <div class="control pct-suffix"><label>Premium Drift</label><input type="number" id="premium_drift_annual" value="${_sv('premium_drift_annual','2.0')}" step="0.5"></div>
+      <div class="control pct-suffix"><label>Exposure Growth</label><input type="number" id="exposure_growth_annual" value="${_sv('exposure_growth_annual','3.0')}" step="0.5"></div>
+      <p style="font-size:11px;color:var(--text-dim);margin-top:12px">Click "Judgmental" in any trend table to use these values. Changing them live-updates the chart.</p>`;
+
+  } else if (activeTab === 'ilf') {
+    html += `
+      <h2>ILF / IDF</h2>
+      <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Adjust current in-force factors below. Indicated change = Empirical Relativity / Current Factor − 1.</p>`;
+    if (DATA && DATA.simulation && DATA.simulation.config) {
+      const cfg = DATA.simulation.config;
+      if (isCoverageLimit()) {
+        html += `<h2>Current ILF Factors</h2>`;
+        for (const l of cfg.limits) {
+          html += `<div class="control"><label>$${l.limit.toLocaleString()}</label><input type="number" step="0.001" id="current_ilf_${l.limit}" value="${l.ilf.toFixed(3)}" onchange="updateCurrentFactors()"></div>`;
+        }
+      }
+      if (isCoverageDeductible()) {
+        html += `<h2>Current IDF Factors</h2>`;
+        for (const d of cfg.deductibles) {
+          html += `<div class="control"><label>$${d.deductible.toLocaleString()}</label><input type="number" step="0.001" id="current_idf_${d.deductible}" value="${d.factor.toFixed(3)}" onchange="updateCurrentFactors()"></div>`;
+        }
+      }
+    }
+
+  } else if (activeTab === 'indications') {
+    html += `
+      <h2>Indication Inputs</h2>
+      <div class="control-row">
+        <div class="control pct-suffix"><label>Expense Ratio</label><input type="number" id="expense_ratio" value="${_sv('expense_ratio','30.0')}" step="1"></div>
+        <div class="control pct-suffix"><label>Target Profit</label><input type="number" id="target_profit" value="${_sv('target_profit','5.0')}" step="0.5"></div>
+      </div>
+      <div class="control"><label>Trend-to Period (years)</label><input type="number" id="trend_to_year" value="${_sv('trend_to_year','1.5')}" step="0.5"></div>
+      <button class="btn" onclick="runAnalysis()" style="margin-top:12px">Re-run Indications</button>`;
+  }
+
+  sb.innerHTML = html;
+
+  // Re-attach trend input listeners when on trends tab
+  if (activeTab === 'trends') {
+    for (const id of ['frequency_trend_annual', 'severity_trend_annual', 'premium_drift_annual']) {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', () => { if (DATA) render(); });
+    }
+  }
+}
+
+// Helpers to persist sidebar values across tab switches
+const _sidebarValues = {};
+function _sv(id, def) { return _sidebarValues[id] != null ? _sidebarValues[id] : def; }
+function _opts(pairs, selected) { return pairs.map(([v,l]) => `<option value="${v}"${v===selected?' selected':''}>${l}</option>`).join(''); }
+
+// Save sidebar values before re-render
+function _saveSidebarValues() {
+  const ids = ['base_year','years','base_policy_count','base_premium_per_policy',
+    'frequency_trend_annual','severity_trend_annual','premium_drift_annual','exposure_growth_annual',
+    'base_severity_mean','severity_cv','base_frequency','seed',
+    'ldf_window','ldf_type','ldf_variant','tail_factor',
+    'expense_ratio','target_profit','trend_to_year'];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el) _sidebarValues[id] = el.value;
+  }
 }
 
 function fmt(n, dec=0) { if (n==null) return ''; return n.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
@@ -366,7 +582,8 @@ function renderTriangleTab(metric) {
   if (!triData) return '<div class="empty-state">No data</div>';
   const tri = triData.triangle, fac = triData.factors;
 
-  let html = `<div class="section-title">${metricLabel(metric)} Triangle</div>`;
+  let html = '<div class="trend-card">';
+  html += `<div class="section-title">${metricLabel(metric)} Triangle</div>`;
   html += '<div class="table-wrap"><table><thead><tr><th>AY</th>';
   for (const d of tri.development_periods) html += `<th>${d}</th>`;
   html += '</tr></thead><tbody>';
@@ -377,8 +594,9 @@ function renderTriangleTab(metric) {
   }
   html += '</tbody></table></div>';
 
-  html += `<div class="section-title">Age-to-Age Factors</div>`;
+  html += `<div class="section-title" style="margin-top:16px">Age-to-Age Factors</div>`;
   html += renderFactorsTable(fac, tri.accident_years, metric);
+  html += '</div>';
   return html;
 }
 
@@ -387,6 +605,18 @@ function renderFactorsTable(fac, accidentYears, metric) {
   if (!activeAvgFilters[key]) activeAvgFilters[key] = new Set(['All Vol Wtd','All Simple','All Vol Wtd Hi-Lo','4Q Vol Wtd','8Q Vol Wtd']);
   const activeSet = activeAvgFilters[key];
   const uniqueLabels = [...new Set(fac.averages.map(a=>a.label))];
+  const nPeriods = fac.period_labels.length;
+
+  // Initialize judgmental overrides array if needed
+  if (!judgmentalLdfs[key]) judgmentalLdfs[key] = new Array(nPeriods).fill(null);
+
+  // Effective selected = judgmental override ?? auto-selected
+  const effectiveSelected = fac.selected.map((s, j) => {
+    const ov = judgmentalLdfs[key][j];
+    return (ov != null && !isNaN(ov)) ? ov : s;
+  });
+  // CDF = right-to-left cumulative product of effective selected
+  const effectiveCdf = cumulativeProductRTL_js(effectiveSelected);
 
   let html = '<div class="filter-bar">';
   for (const label of uniqueLabels) html += `<button class="filter-chip ${activeSet.has(label)?'active':''}" onclick="toggleAvgFilter('${key}','${label}')">${label}</button>`;
@@ -401,17 +631,33 @@ function renderFactorsTable(fac, accidentYears, metric) {
     for (const f of fac.factors_by_year[i]) html += `<td>${f!=null?fmt(f,4):''}</td>`;
     html += '</tr>';
   }
-  html += `<tr class="separator"><td colspan="${fac.period_labels.length+1}"></td></tr>`;
-  for (const avg of fac.averages) {
+  html += `<tr class="separator"><td colspan="${nPeriods+1}"></td></tr>`;
+
+  // Average rows — clickable to populate judgmental
+  for (let ai=0; ai<fac.averages.length; ai++) {
+    const avg = fac.averages[ai];
     if (!activeSet.has(avg.label)) continue;
-    html += `<tr class="avg-row"><td>${avg.label}</td>`;
+    html += `<tr class="avg-row" onclick="populateJudgmentalLdf('${key}',${ai})"><td>${avg.label}</td>`;
     for (const v of avg.values) html += `<td>${v!=null?fmt(v,4):''}</td>`;
     html += '</tr>';
   }
+
+  // Judgmental row with editable inputs
+  const hasOverrides = judgmentalLdfs[key].some(v => v != null);
+  html += `<tr class="judgmental-row"><td>Judgmental${hasOverrides ? '<span class="reset-link" onclick="event.stopPropagation();resetJudgmentalLdf(\''+key+'\')">reset</span>' : ''}</td>`;
+  for (let j=0; j<nPeriods; j++) {
+    const ov = judgmentalLdfs[key][j];
+    const ph = fac.selected[j] != null ? fac.selected[j].toFixed(4) : '';
+    const val = ov != null ? ov.toFixed(4) : '';
+    html += `<td><input class="judgmental-input" type="number" step="0.001" placeholder="${ph}" value="${val}" onchange="setJudgmentalLdf('${key}',${j},this.value)"></td>`;
+  }
+  html += '</tr>';
+
+  // Effective Selected row
   html += `<tr class="selected-row"><td>Selected</td>`;
-  for (const s of fac.selected) html += `<td>${fmt(s,4)}</td>`;
+  for (const s of effectiveSelected) html += `<td>${fmt(s,4)}</td>`;
   html += '</tr><tr class="cdf-row"><td>CDF</td>';
-  for (const c of fac.cumulative_to_ultimate) html += `<td>${fmt(c,4)}</td>`;
+  for (const c of effectiveCdf) html += `<td>${fmt(c,4)}</td>`;
   html += '</tr></tbody></table></div>';
   return html;
 }
@@ -795,6 +1041,56 @@ function initTrendCharts() {
 }
 
 // ── Indications ──
+// ── ILF / Deductible Tab ──
+function renderIlfTab() {
+  if (!DATA || !DATA.ilf_analysis) return '<div class="empty-state">Run analysis first</div>';
+
+  const ilf = DATA.ilf_analysis;
+  const showIlf = isCoverageLimit();
+  const showIdf = isCoverageDeductible();
+  let html = '';
+
+  // Empirical ILFs
+  if (showIlf) {
+  html += '<div class="trend-card">';
+  html += '<div class="section-title">Increased Limits Factors (ILF)</div>';
+  html += `<p style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Empirically derived from ${ilf.total_claims.toLocaleString()} simulated ground-up claim severities. Base limit: $${ilf.base_limit.toLocaleString()}. Each relativity = E[min(Loss, Limit)] / E[min(Loss, Base Limit)].</p>`;
+
+  html += '<div class="table-wrap"><table><thead><tr><th>Policy Limit</th><th>Expected Limited Loss</th><th>Current Factor</th><th>Indicated Relativity</th><th>Indicated Change</th><th>Claims</th><th>Distribution</th></tr></thead><tbody>';
+  for (const row of ilf.ilfs) {
+    const isBase = row.limit === ilf.base_limit;
+    const cls = isBase ? ' class="selected-row"' : '';
+    const ic = row.indicated_change;
+    const icFmt = Math.abs(ic) < 0.001 ? 'Base'
+                : ic > 0 ? `<span style="color:var(--red)">+${(ic*100).toFixed(1)}%</span>`
+                : `<span style="color:var(--green)">${(ic*100).toFixed(1)}%</span>`;
+    html += `<tr${cls}><td>$${row.limit.toLocaleString()}</td><td>${fmt(Math.round(row.expected_limited_loss))}</td><td>${row.current_ilf.toFixed(3)}</td><td>${row.ilf.toFixed(3)}</td><td>${icFmt}</td><td>${fmt(row.claim_count)}</td><td>${(row.weight * 100).toFixed(0)}%</td></tr>`;
+  }
+  html += '</tbody></table></div></div>';
+  } // end showIlf
+
+  // Empirical Increased Deductible Factors
+  if (showIdf) {
+  html += '<div class="trend-card">';
+  html += '<div class="section-title">Increased Deductible Factors (IDF)</div>';
+  html += `<p style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Empirically derived. Each relativity = E[max(Loss − Ded, 0)] / E[max(Loss − Base Ded, 0)]. Base deductible: $${ilf.base_deductible.toLocaleString()}.</p>`;
+
+  html += '<div class="table-wrap"><table><thead><tr><th>Deductible</th><th>Expected Net Loss</th><th>Current Factor</th><th>Indicated Relativity</th><th>Indicated Change</th><th>Claims</th><th>Distribution</th></tr></thead><tbody>';
+  for (const row of ilf.deductible_relativities) {
+    const isBase = row.deductible === ilf.base_deductible;
+    const cls = isBase ? ' class="selected-row"' : '';
+    const ic = row.indicated_change;
+    const icFmt = Math.abs(ic) < 0.001 ? 'Base'
+                : ic > 0 ? `<span style="color:var(--red)">+${(ic*100).toFixed(1)}%</span>`
+                : `<span style="color:var(--green)">${(ic*100).toFixed(1)}%</span>`;
+    html += `<tr${cls}><td>$${row.deductible.toLocaleString()}</td><td>${fmt(Math.round(row.expected_net_loss))}</td><td>${row.current_factor.toFixed(3)}</td><td>${row.factor.toFixed(3)}</td><td>${icFmt}</td><td>${fmt(row.claim_count)}</td><td>${(row.weight * 100).toFixed(0)}%</td></tr>`;
+  }
+  html += '</tbody></table></div></div>';
+  } // end showIdf
+
+  return html;
+}
+
 function renderIndications() {
   const ind = DATA.indication, inp = DATA.indication_inputs;
   const wic = ind.weighted_indicated_change, cls = wic>=0?'positive':'negative';
@@ -825,13 +1121,8 @@ function renderIndications() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  renderSidebar(); // initial sidebar
   runAnalysis();
-  // Re-render trends chart when sidebar trend inputs change (for Judgmental selection)
-  for (const id of ['frequency_trend_annual', 'severity_trend_annual', 'premium_drift_annual']) {
-    document.getElementById(id).addEventListener('input', () => {
-      if (DATA && activeTab === 'trends') render();
-    });
-  }
 });
 </script>
 </body>

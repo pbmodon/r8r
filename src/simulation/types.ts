@@ -68,6 +68,13 @@ export interface SimulationConfig {
    */
   rate_changes: { year: number; pct: number }[];
 
+  // ── Segmentation ──
+
+  states: StateConfig[];
+  coverages: CoverageConfig[];
+  limits: LimitConfig[];
+  deductibles: DeductibleConfig[];
+
   // ── Noise ──
 
   /** Standard deviation of random noise applied to development proportions (default 0.03) */
@@ -76,9 +83,38 @@ export interface SimulationConfig {
   frequency_noise: number;
 }
 
+export interface StateConfig {
+  code: string;
+  weight: number;
+  frequency_multiplier: number;
+  severity_multiplier: number;
+}
+
+export interface CoverageConfig {
+  code: string;
+  name: string;
+  weight: number;
+  frequency_multiplier: number;
+  severity_multiplier: number;
+}
+
+export interface LimitConfig {
+  limit: number;
+  ilf: number;
+  weight: number;
+}
+
+export interface DeductibleConfig {
+  deductible: number;
+  factor: number;
+  weight: number;
+}
+
 /** Complete simulation output ready for analysis */
 export interface SimulationResult {
   claims: Claim[];
+  /** Raw simulated claims with ground-up severity (before development snapshots) */
+  raw_claims: SimulatedClaim[];
   policies: Policy[];
   rate_history: RateChange[];
   config: SimulationConfig;
@@ -100,6 +136,12 @@ export interface SimulatedClaim {
   accident_year: number;
   accident_date: string;
   ultimate_severity: number;
+  /** Pre-cap, pre-deductible severity for ILF analysis */
+  ground_up_severity: number;
+  state: string;
+  coverage: string;
+  policy_limit: number;
+  deductible: number;
 }
 
 export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
@@ -124,6 +166,32 @@ export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
 
   paid_development_pattern: [0.25, 0.55, 0.75, 0.87, 0.93, 0.97, 0.99, 1.00],
   case_reserve_adequacy:    [0.60, 0.72, 0.82, 0.90, 0.95, 0.98, 0.99, 1.00],
+
+  states: [
+    { code: 'CA', weight: 0.30, frequency_multiplier: 1.10, severity_multiplier: 1.15 },
+    { code: 'TX', weight: 0.25, frequency_multiplier: 0.95, severity_multiplier: 0.90 },
+    { code: 'FL', weight: 0.20, frequency_multiplier: 1.20, severity_multiplier: 1.10 },
+    { code: 'NY', weight: 0.15, frequency_multiplier: 1.05, severity_multiplier: 1.20 },
+    { code: 'IL', weight: 0.10, frequency_multiplier: 0.90, severity_multiplier: 0.85 },
+  ],
+  coverages: [
+    { code: 'BI', name: 'Bodily Injury', weight: 0.30, frequency_multiplier: 1.0, severity_multiplier: 1.3 },
+    { code: 'PD', name: 'Property Damage', weight: 0.25, frequency_multiplier: 1.1, severity_multiplier: 0.7 },
+    { code: 'COMP', name: 'Comprehensive', weight: 0.20, frequency_multiplier: 0.7, severity_multiplier: 0.4 },
+    { code: 'COLL', name: 'Collision', weight: 0.25, frequency_multiplier: 1.3, severity_multiplier: 0.6 },
+  ],
+  limits: [
+    { limit: 100000, ilf: 1.000, weight: 0.30 },
+    { limit: 300000, ilf: 1.350, weight: 0.35 },
+    { limit: 500000, ilf: 1.550, weight: 0.20 },
+    { limit: 1000000, ilf: 1.850, weight: 0.15 },
+  ],
+  deductibles: [
+    { deductible: 250, factor: 1.10, weight: 0.15 },
+    { deductible: 500, factor: 1.00, weight: 0.40 },
+    { deductible: 1000, factor: 0.85, weight: 0.30 },
+    { deductible: 2500, factor: 0.65, weight: 0.15 },
+  ],
 
   rate_changes: [
     { year: 2016, pct: 0.03 },

@@ -20,6 +20,10 @@ export interface Claim {
   claimant_count: number;
   status: string;
   evaluation_date: string;
+  state: string;
+  coverage: string;
+  policy_limit: number;
+  deductible: number;
 }
 
 export interface Policy {
@@ -31,6 +35,10 @@ export interface Policy {
   exposures: number;
   in_force_count: number;
   effective_date: string | null;
+  state: string;
+  coverage: string;
+  policy_limit: number;
+  deductible: number;
 }
 
 export interface RateChange {

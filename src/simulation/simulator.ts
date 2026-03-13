@@ -8,6 +8,16 @@ import {
 } from './types';
 import { SeededRandom } from './random';
 
+function weightedSelect<T extends { weight: number }>(rng: SeededRandom, items: T[]): T {
+  const total = items.reduce((s, i) => s + i.weight, 0);
+  let r = rng.next() * total;
+  for (const item of items) {
+    r -= item.weight;
+    if (r <= 0) return item;
+  }
+  return items[items.length - 1];
+}
+
 /**
  * Simulate a complete insurance dataset: policies, claims with development
  * snapshots, and rate change history.
@@ -60,6 +70,10 @@ export function simulate(
       exposures: policyCount,
       in_force_count: policyCount,
       effective_date: `${ay}-01-01`,
+      state: 'ALL',
+      coverage: 'ALL',
+      policy_limit: 0,
+      deductible: 0,
     };
     policies.push(policy);
 
@@ -76,7 +90,15 @@ export function simulate(
     let yearUltimateLosses = 0;
 
     for (let c = 0; c < claimCount; c++) {
-      const ultimateSeverity = Math.max(100, rng.nextLognormal(severityMean, config.severity_cv));
+      const stateConfig = weightedSelect(rng, config.states);
+      const coverageConfig = weightedSelect(rng, config.coverages);
+      const limitConfig = weightedSelect(rng, config.limits);
+      const deductibleConfig = weightedSelect(rng, config.deductibles);
+
+      const adjustedSeverityMean = severityMean * stateConfig.severity_multiplier * coverageConfig.severity_multiplier;
+      const groundUpSeverity = Math.max(100, rng.nextLognormal(adjustedSeverityMean, config.severity_cv));
+      const cappedSeverity = Math.min(groundUpSeverity, limitConfig.limit);
+      const netSeverity = cappedSeverity * deductibleConfig.factor;
       const accidentDate = rng.nextDateInYear(ay);
 
       allClaims.push({
@@ -84,10 +106,15 @@ export function simulate(
         claim_number: `CLM-${ay}-${String(claimIdCounter++).padStart(6, '0')}`,
         accident_year: ay,
         accident_date: accidentDate,
-        ultimate_severity: ultimateSeverity,
+        ultimate_severity: netSeverity,
+        ground_up_severity: groundUpSeverity,
+        state: stateConfig.code,
+        coverage: coverageConfig.code,
+        policy_limit: limitConfig.limit,
+        deductible: deductibleConfig.deductible,
       });
 
-      yearUltimateLosses += ultimateSeverity;
+      yearUltimateLosses += netSeverity;
     }
 
     summaryYears.push({
@@ -167,6 +194,10 @@ export function simulate(
         claimant_count: 1,
         status,
         evaluation_date: evaluationDate,
+        state: rawClaim.state,
+        coverage: rawClaim.coverage,
+        policy_limit: rawClaim.policy_limit,
+        deductible: rawClaim.deductible,
       });
     }
   }
@@ -191,7 +222,7 @@ export function simulate(
     years: summaryYears,
   };
 
-  return { claims, policies, rate_history, config, summary };
+  return { claims, raw_claims: allClaims, policies, rate_history, config, summary };
 }
 
 /**
@@ -209,7 +240,28 @@ export interface AggregatedTriangleRow {
   avg_incurred_severity: number;
 }
 
-export function aggregateForTriangles(claims: Claim[]): AggregatedTriangleRow[] {
+export interface SegmentFilter {
+  state?: string;
+  coverage?: string;
+  limit?: number;
+  deductible?: number;
+}
+
+export function aggregateForTriangles(
+  claims: Claim[],
+  filter?: SegmentFilter
+): AggregatedTriangleRow[] {
+  let filtered = claims;
+  if (filter) {
+    filtered = claims.filter(c => {
+      if (filter.state && c.state !== filter.state) return false;
+      if (filter.coverage && c.coverage !== filter.coverage) return false;
+      if (filter.limit != null && c.policy_limit !== filter.limit) return false;
+      if (filter.deductible != null && c.deductible !== filter.deductible) return false;
+      return true;
+    });
+  }
+
   const key = (ay: number, dev: number) => `${ay}-${dev}`;
   const buckets = new Map<string, {
     ay: number;
@@ -219,7 +271,7 @@ export function aggregateForTriangles(claims: Claim[]): AggregatedTriangleRow[] 
     count: number;
   }>();
 
-  for (const c of claims) {
+  for (const c of filtered) {
     const k = key(c.accident_year, c.development_month);
     let bucket = buckets.get(k);
     if (!bucket) {
