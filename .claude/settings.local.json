@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node dist/index.js 2>&1)",
+      "Bash(cd C:/Users/Pat/WebstormProjects/r8r && node dist/server.js 2>&1)"
+    ]
+  }
+}

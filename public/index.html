@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>r8r — Actuarial Analysis</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #242836;
+  --border: #2e3347;
+  --text: #e1e4ed;
+  --text-dim: #8b90a5;
+  --accent: #6c8cff;
+  --accent-dim: #4a6ad4;
+  --green: #4ade80;
+  --red: #f87171;
+  --orange: #fb923c;
+  --font: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.header .subtitle {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.layout {
+  display: flex;
+  height: calc(100vh - 57px);
+}
+
+/* ── Sidebar ── */
+
+.sidebar {
+  width: 320px;
+  min-width: 320px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.sidebar h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+  margin-top: 20px;
+}
+
+.sidebar h2:first-child { margin-top: 0; }
+
+.control {
+  margin-bottom: 10px;
+}
+
+.control label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 3px;
+}
+
+.control input[type="number"],
+.control select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-family: var(--font);
+  font-size: 12px;
+}
+
+.control input[type="number"]:focus,
+.control select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.control-row {
+  display: flex;
+  gap: 8px;
+}
+
+.control-row .control { flex: 1; }
+
+.pct-suffix {
+  position: relative;
+}
+.pct-suffix input { padding-right: 24px; }
+.pct-suffix::after {
+  content: '%';
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 16px;
+  transition: background 0.15s;
+}
+
+.btn:hover { background: var(--accent-dim); }
+.btn:disabled { opacity: 0.5; cursor: wait; }
+
+/* ── Main Content ── */
+
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+/* Tabs */
+
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  padding: 8px 16px;
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab:hover { color: var(--text); }
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Tables */
+
+.table-wrap {
+  overflow-x: auto;
+  margin-bottom: 24px;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+th, td {
+  padding: 5px 10px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  background: var(--surface2);
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: sticky;
+  top: 0;
+}
+
+td:first-child, th:first-child {
+  text-align: left;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+tr.separator td {
+  border-top: 2px solid var(--accent-dim);
+  padding-top: 8px;
+}
+
+tr.avg-row td { color: var(--text-dim); }
+tr.avg-row td:first-child { color: var(--text-dim); }
+tr.selected-row td { color: var(--green); font-weight: 700; }
+tr.selected-row td:first-child { color: var(--green); }
+tr.cdf-row td { color: var(--orange); font-weight: 700; }
+tr.cdf-row td:first-child { color: var(--orange); }
+
+/* Summary cards */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.card .card-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.card .card-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.card .card-value.positive { color: var(--red); }
+.card .card-value.negative { color: var(--green); }
+
+.section-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.section-subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-dim);
+}
+
+.empty-state h2 {
+  font-size: 18px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+/* Filter bar for averages */
+.filter-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.filter-chip {
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.filter-chip:hover { border-color: var(--accent); color: var(--text); }
+.filter-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.loading-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>r8r</h1>
+  <span class="subtitle">Actuarial Analysis Engine — Loss Development, Trends &amp; Rate Indications</span>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <h2>Simulation Parameters</h2>
+
+    <div class="control-row">
+      <div class="control">
+        <label>Base Year</label>
+        <input type="number" id="base_year" value="2015">
+      </div>
+      <div class="control">
+        <label>Years</label>
+        <input type="number" id="years" value="10">
+      </div>
+    </div>
+
+    <div class="control-row">
+      <div class="control">
+        <label>Policy Count</label>
+        <input type="number" id="base_policy_count" value="10000">
+      </div>
+      <div class="control">
+        <label>Avg Premium</label>
+        <input type="number" id="base_premium_per_policy" value="1200" step="50">
+      </div>
+    </div>
+
+    <h2>Trend Toggles</h2>
+
+    <div class="control pct-suffix">
+      <label>Frequency Trend (annual)</label>
+      <input type="number" id="frequency_trend_annual" value="1.0" step="0.5">
+    </div>
+    <div class="control pct-suffix">
+      <label>Severity Trend (annual)</label>
+      <input type="number" id="severity_trend_annual" value="4.0" step="0.5">
+    </div>
+    <div class="control pct-suffix">
+      <label>Premium Drift (annual)</label>
+      <input type="number" id="premium_drift_annual" value="2.0" step="0.5">
+    </div>
+    <div class="control pct-suffix">
+      <label>Exposure Growth (annual)</label>
+      <input type="number" id="exposure_growth_annual" value="3.0" step="0.5">
+    </div>
+
+    <h2>Severity Distribution</h2>
+
+    <div class="control-row">
+      <div class="control">
+        <label>Mean Severity</label>
+        <input type="number" id="base_severity_mean" value="15000" step="500">
+      </div>
+      <div class="control">
+        <label>CV</label>
+        <input type="number" id="severity_cv" value="1.5" step="0.1">
+      </div>
+    </div>
+    <div class="control">
+      <label>Base Frequency</label>
+      <input type="number" id="base_frequency" value="0.08" step="0.01">
+    </div>
+
+    <h2>LDF Selection</h2>
+
+    <div class="control-row">
+      <div class="control">
+        <label>Window</label>
+        <select id="ldf_window">
+          <option value="all" selected>All</option>
+          <option value="4">4Q</option>
+          <option value="6">6Q</option>
+          <option value="8">8Q</option>
+          <option value="12">12Q</option>
+          <option value="16">16Q</option>
+        </select>
+      </div>
+      <div class="control">
+        <label>Type</label>
+        <select id="ldf_type">
+          <option value="volume_weighted" selected>Volume Wtd</option>
+          <option value="simple">Simple</option>
+        </select>
+      </div>
+    </div>
+    <div class="control-row">
+      <div class="control">
+        <label>Variant</label>
+        <select id="ldf_variant">
+          <option value="straight" selected>Straight</option>
+          <option value="hi-lo">Hi-Lo</option>
+        </select>
+      </div>
+      <div class="control">
+        <label>Tail Factor</label>
+        <input type="number" id="tail_factor" value="1.000" step="0.005">
+      </div>
+    </div>
+
+    <h2>Indication Inputs</h2>
+
+    <div class="control-row">
+      <div class="control pct-suffix">
+        <label>Expense Ratio</label>
+        <input type="number" id="expense_ratio" value="30.0" step="1">
+      </div>
+      <div class="control pct-suffix">
+        <label>Target Profit</label>
+        <input type="number" id="target_profit" value="5.0" step="0.5">
+      </div>
+    </div>
+    <div class="control">
+      <label>Trend-to Period (years)</label>
+      <input type="number" id="trend_to_year" value="1.5" step="0.5">
+    </div>
+    <div class="control">
+      <label>Seed</label>
+      <input type="number" id="seed" value="42">
+    </div>
+
+    <button class="btn" id="runBtn" onclick="runAnalysis()">Run Analysis</button>
+  </div>
+
+  <div class="main" id="mainContent">
+    <div class="empty-state">
+      <h2>Ready to Analyze</h2>
+      <p>Configure parameters and click Run Analysis to simulate data and generate actuarial exhibits.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+let DATA = null;
+let activeTab = 'summary';
+let activeAvgFilters = {};
+
+function val(id) { return document.getElementById(id).value; }
+function numVal(id) { return parseFloat(val(id)); }
+
+async function runAnalysis() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-spinner"></span>Running...';
+
+  const ldfWindow = val('ldf_window');
+
+  const body = {
+    seed: numVal('seed'),
+    years: numVal('years'),
+    base_year: numVal('base_year'),
+    evaluation_year: numVal('base_year') + numVal('years'),
+    base_policy_count: numVal('base_policy_count'),
+    base_premium_per_policy: numVal('base_premium_per_policy'),
+    exposure_growth_annual: numVal('exposure_growth_annual') / 100,
+    premium_drift_annual: numVal('premium_drift_annual') / 100,
+    base_frequency: numVal('base_frequency'),
+    frequency_trend_annual: numVal('frequency_trend_annual') / 100,
+    base_severity_mean: numVal('base_severity_mean'),
+    severity_cv: numVal('severity_cv'),
+    severity_trend_annual: numVal('severity_trend_annual') / 100,
+    ldf_method: {
+      window: ldfWindow === 'all' ? 'all' : parseInt(ldfWindow),
+      type: val('ldf_type'),
+      variant: val('ldf_variant'),
+    },
+    tail_factor: numVal('tail_factor'),
+    expense_ratio: numVal('expense_ratio') / 100,
+    target_profit: numVal('target_profit') / 100,
+    trend_to_year: numVal('trend_to_year'),
+  };
+
+  try {
+    const resp = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    DATA = await resp.json();
+    if (DATA.error) throw new Error(DATA.error);
+    render();
+  } catch (e) {
+    document.getElementById('mainContent').innerHTML =
+      `<div class="empty-state"><h2>Error</h2><p>${e.message}</p></div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run Analysis';
+  }
+}
+
+function render() {
+  const main = document.getElementById('mainContent');
+  const tabs = ['summary', 'paid', 'incurred', 'paid_severity', 'incurred_severity', 'trends', 'indications'];
+  const tabLabels = {
+    summary: 'Summary',
+    paid: 'Paid Triangle',
+    incurred: 'Incurred Triangle',
+    paid_severity: 'Paid Severity',
+    incurred_severity: 'Incurred Severity',
+    trends: 'Trends',
+    indications: 'Indications',
+  };
+
+  let html = '<div class="tabs">';
+  for (const t of tabs) {
+    html += `<button class="tab ${t === activeTab ? 'active' : ''}" onclick="switchTab('${t}')">${tabLabels[t]}</button>`;
+  }
+  html += '</div>';
+
+  html += '<div id="tabContent">';
+  html += renderTab(activeTab);
+  html += '</div>';
+
+  main.innerHTML = html;
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  render();
+}
+
+function renderTab(tab) {
+  if (tab === 'summary') return renderSummary();
+  if (tab === 'trends') return renderTrends();
+  if (tab === 'indications') return renderIndications();
+  return renderTriangleTab(tab);
+}
+
+function fmt(n, dec = 0) {
+  if (n == null) return '';
+  return n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+function fmtPct(n) {
+  if (n == null) return '';
+  return (n * 100).toFixed(1) + '%';
+}
+
+// ── Summary Tab ──
+
+function renderSummary() {
+  const s = DATA.simulation.summary;
+  const ind = DATA.indication;
+  const wic = ind.weighted_indicated_change;
+  const cls = wic >= 0 ? 'positive' : 'negative';
+
+  let html = '<div class="cards">';
+  html += card('Total Policies', fmt(s.years.reduce((a, y) => a + y.policies, 0)));
+  html += card('Total Claims', fmt(s.total_claims));
+  html += card('Claim Snapshots', fmt(s.total_claim_snapshots));
+  html += card('Permissible LR', fmtPct(ind.permissible_loss_ratio));
+  html += cardColor('Wtd Indicated Chg', fmtPct(wic), cls);
+  html += cardColor('Avg Indicated Chg', fmtPct(ind.all_year_average_change),
+    ind.all_year_average_change >= 0 ? 'positive' : 'negative');
+  html += '</div>';
+
+  // Year-by-year summary
+  html += '<div class="section-title">Simulation Summary by Year</div>';
+  html += '<div class="table-wrap"><table><thead><tr>';
+  html += '<th>Year</th><th>Policies</th><th>Claims</th><th>Frequency</th><th>Ult Losses</th><th>Avg Severity</th><th>Earned Prem</th>';
+  html += '</tr></thead><tbody>';
+
+  const policies = DATA.simulation.policies;
+  for (let i = 0; i < s.years.length; i++) {
+    const y = s.years[i];
+    const p = policies[i];
+    const freq = (y.claims / y.policies * 100).toFixed(2);
+    const sev = y.claims > 0 ? fmt(Math.round(y.ultimate_losses / y.claims)) : '—';
+    html += `<tr>
+      <td>${y.year}</td><td>${fmt(y.policies)}</td><td>${fmt(y.claims)}</td>
+      <td>${freq}%</td><td>${fmt(y.ultimate_losses)}</td><td>${sev}</td>
+      <td>${fmt(Math.round(p.earned_premium))}</td></tr>`;
+  }
+  html += '</tbody></table></div>';
+
+  // On-level factors
+  html += '<div class="section-title">On-Level Factors</div>';
+  html += '<div class="table-wrap"><table><thead><tr><th>Policy Year</th><th>On-Level Factor</th></tr></thead><tbody>';
+  for (let i = 0; i < DATA.on_level.policy_years.length; i++) {
+    html += `<tr><td>${DATA.on_level.policy_years[i]}</td><td>${fmt(DATA.on_level.on_level_factors[i], 4)}</td></tr>`;
+  }
+  html += '</tbody></table></div>';
+
+  return html;
+}
+
+function card(label, value) {
+  return `<div class="card"><div class="card-label">${label}</div><div class="card-value">${value}</div></div>`;
+}
+
+function cardColor(label, value, cls) {
+  return `<div class="card"><div class="card-label">${label}</div><div class="card-value ${cls}">${value}</div></div>`;
+}
+
+// ── Triangle Tab ──
+
+function renderTriangleTab(metric) {
+  const triData = DATA.triangles[metric];
+  if (!triData) return '<div class="empty-state">No data</div>';
+
+  const tri = triData.triangle;
+  const fac = triData.factors;
+  const isSeverity = metric.includes('severity');
+  const dec = isSeverity ? 0 : 0;
+
+  // Triangle table
+  let html = `<div class="section-title">${metricLabel(metric)} Triangle</div>`;
+  html += '<div class="table-wrap"><table><thead><tr><th>AY</th>';
+  for (const d of tri.development_periods) html += `<th>${d}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (let i = 0; i < tri.accident_years.length; i++) {
+    html += `<tr><td>${tri.accident_years[i]}</td>`;
+    for (let j = 0; j < tri.development_periods.length; j++) {
+      html += `<td>${fmt(tri.values[i][j], dec)}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+
+  // Factors
+  html += `<div class="section-title">Age-to-Age Factors</div>`;
+  html += renderFactorsTable(fac, tri.accident_years, metric);
+
+  return html;
+}
+
+function renderFactorsTable(fac, accidentYears, metric) {
+  // Filter chips
+  const key = metric;
+  if (!activeAvgFilters[key]) {
+    activeAvgFilters[key] = new Set([
+      'All Vol Wtd', 'All Simple', 'All Vol Wtd Hi-Lo', '4Q Vol Wtd', '8Q Vol Wtd'
+    ]);
+  }
+  const activeSet = activeAvgFilters[key];
+
+  const allLabels = fac.averages.map(a => a.label);
+  const uniqueLabels = [...new Set(allLabels)];
+
+  let html = '<div class="filter-bar">';
+  for (const label of uniqueLabels) {
+    const cls = activeSet.has(label) ? 'active' : '';
+    html += `<button class="filter-chip ${cls}" onclick="toggleAvgFilter('${key}','${label}')">${label}</button>`;
+  }
+  html += '</div>';
+
+  html += '<div class="table-wrap"><table><thead><tr><th></th>';
+  for (const pl of fac.period_labels) html += `<th>${pl}</th>`;
+  html += '</tr></thead><tbody>';
+
+  // Link ratios by year
+  for (let i = 0; i < fac.factors_by_year.length; i++) {
+    const label = i < accidentYears.length ? accidentYears[i] : i;
+    html += `<tr><td>${label}</td>`;
+    for (const f of fac.factors_by_year[i]) {
+      html += `<td>${f != null ? fmt(f, 4) : ''}</td>`;
+    }
+    html += '</tr>';
+  }
+
+  // Separator
+  html += `<tr class="separator"><td colspan="${fac.period_labels.length + 1}"></td></tr>`;
+
+  // Filtered averages
+  for (const avg of fac.averages) {
+    if (!activeSet.has(avg.label)) continue;
+    html += `<tr class="avg-row"><td>${avg.label}</td>`;
+    for (const v of avg.values) {
+      html += `<td>${v != null ? fmt(v, 4) : ''}</td>`;
+    }
+    html += '</tr>';
+  }
+
+  // Selected
+  html += `<tr class="selected-row"><td>Selected</td>`;
+  for (const s of fac.selected) html += `<td>${fmt(s, 4)}</td>`;
+  html += '</tr>';
+
+  // CDF
+  html += `<tr class="cdf-row"><td>CDF</td>`;
+  for (const c of fac.cumulative_to_ultimate) html += `<td>${fmt(c, 4)}</td>`;
+  html += '</tr>';
+
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function toggleAvgFilter(key, label) {
+  if (!activeAvgFilters[key]) activeAvgFilters[key] = new Set();
+  const set = activeAvgFilters[key];
+  if (set.has(label)) set.delete(label); else set.add(label);
+  render();
+}
+
+function metricLabel(m) {
+  const labels = {
+    paid: 'Paid Loss',
+    incurred: 'Incurred Loss',
+    paid_severity: 'Paid Severity',
+    incurred_severity: 'Incurred Severity',
+  };
+  return labels[m] || m;
+}
+
+// ── Trends Tab ──
+
+function renderTrends() {
+  let html = '';
+
+  const sections = [
+    { key: 'loss', title: 'Total Loss Trend' },
+    { key: 'severity', title: 'Severity Trend' },
+    { key: 'frequency', title: 'Frequency Trend' },
+  ];
+
+  for (const sec of sections) {
+    const fits = DATA.trend_fits[sec.key];
+    html += `<div class="section-title">${sec.title}</div>`;
+    html += '<div class="table-wrap"><table><thead><tr>';
+    html += '<th>Method</th><th>Annual Trend</th><th>R²</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const f of fits) {
+      const r2color = f.r_squared > 0.9 ? 'color:var(--green)' :
+                      f.r_squared > 0.7 ? 'color:var(--orange)' : 'color:var(--red)';
+      html += `<tr><td>${f.label}</td><td>${fmtPct(f.annual_trend)}</td>
+        <td style="${r2color}">${f.r_squared.toFixed(4)}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+
+  return html;
+}
+
+// ── Indications Tab ──
+
+function renderIndications() {
+  const ind = DATA.indication;
+  const inp = DATA.indication_inputs;
+  const wic = ind.weighted_indicated_change;
+  const cls = wic >= 0 ? 'positive' : 'negative';
+
+  let html = '<div class="cards">';
+  html += card('Expense Ratio', fmtPct(inp.expense_ratio));
+  html += card('Target Profit', fmtPct(inp.target_profit_and_contingency));
+  html += card('Permissible LR', fmtPct(ind.permissible_loss_ratio));
+  html += card('Loss Trend', fmtPct(inp.loss_trend_annual));
+  html += cardColor('Wtd Indicated Chg', fmtPct(wic), cls);
+  html += cardColor('Avg Indicated Chg', fmtPct(ind.all_year_average_change),
+    ind.all_year_average_change >= 0 ? 'positive' : 'negative');
+  html += '</div>';
+
+  html += '<div class="section-title">Rate Level Indication Exhibit</div>';
+  html += '<div class="table-wrap"><table><thead><tr>';
+  html += '<th>AY</th><th>Reported</th><th>LDF</th><th>Ultimate</th>';
+  html += '<th>Trend Fct</th><th>Trnd Ult</th>';
+  html += '<th>Earned Prem</th><th>OL Fct</th><th>OL Prem</th>';
+  html += '<th>Loss Ratio</th><th>Ind Change</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const r of ind.results) {
+    const chgCls = r.indicated_rate_change >= 0 ? 'color:var(--red)' : 'color:var(--green)';
+    html += `<tr>
+      <td>${r.accident_year}</td>
+      <td>${fmt(r.reported_losses)}</td>
+      <td>${fmt(r.development_factor, 4)}</td>
+      <td>${fmt(r.ultimate_losses)}</td>
+      <td>${fmt(r.loss_trend_factor, 4)}</td>
+      <td>${fmt(r.trended_ultimate_losses)}</td>
+      <td>${fmt(r.earned_premium)}</td>
+      <td>${fmt(r.on_level_factor, 4)}</td>
+      <td>${fmt(r.on_level_premium)}</td>
+      <td>${fmtPct(r.expected_loss_ratio)}</td>
+      <td style="${chgCls};font-weight:700">${fmtPct(r.indicated_rate_change)}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+
+  // Ultimates detail
+  html += '<div class="section-title">Development to Ultimate</div>';
+  html += '<div class="table-wrap"><table><thead><tr>';
+  html += '<th>AY</th><th>Latest Reported</th><th>Dev Period</th><th>CDF</th><th>Ultimate</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const u of DATA.ultimates) {
+    html += `<tr><td>${u.accident_year}</td><td>${fmt(u.latest_reported)}</td>
+      <td>${u.development_period}</td><td>${fmt(u.cdf, 4)}</td><td>${fmt(u.ultimate)}</td></tr>`;
+  }
+  html += '</tbody></table></div>';
+
+  return html;
+}
+
+// Auto-run on load
+window.addEventListener('DOMContentLoaded', () => { runAnalysis(); });
+</script>
+</body>
+</html>
