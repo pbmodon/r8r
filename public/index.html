@@ -94,6 +94,9 @@ body {
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
 .table-wrap { overflow-x: auto; margin-bottom: 24px; }
+.table-wrap tbody tr:hover { background: rgba(108, 140, 255, 0.1); }
+.selected-trend-row { background: rgba(108, 140, 255, 0.2) !important; }
+.selected-trend-row td:first-child { border-left: 3px solid #6c8cff; padding-left: 9px; }
 table { border-collapse: collapse; width: 100%; font-size: 12px; }
 th, td { padding: 5px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
 th {
@@ -135,10 +138,30 @@ tr.cdf-row td:first-child { color: var(--orange); }
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 20px;
-  margin-bottom: 24px;
+  margin-bottom: 0;
   position: relative;
   height: 380px;
 }
+
+.trend-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.trend-card .chart-container { border: none; padding: 0; margin-bottom: 16px; }
+.trend-card .section-title { margin-top: 0; }
+.trend-card .table-wrap { margin-bottom: 0; }
+
+.toggle-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.toggle-pill {
+  padding: 6px 14px; border-radius: 16px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-dim); font-size: 12px;
+  font-family: var(--font); font-weight: 600; cursor: pointer; transition: all 0.15s;
+}
+.toggle-pill:hover { border-color: var(--accent); color: var(--text); }
+.toggle-pill.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .loading-spinner {
   display: inline-block; width: 14px; height: 14px;
@@ -221,6 +244,9 @@ let DATA = null;
 let activeTab = 'summary';
 let activeAvgFilters = {};
 let chartInstances = {};
+let selectedTrendFits = {}; // track selected fit index per chart section
+let activeLdfMetrics = new Set(['paid', 'incurred']); // which triangles to show on LDF tab
+let activeTrendMetrics = new Set(['loss', 'severity', 'frequency', 'premium']); // which trends to show
 
 function val(id) { return document.getElementById(id).value; }
 function numVal(id) { return parseFloat(val(id)); }
@@ -260,6 +286,14 @@ async function runAnalysis() {
   }
 }
 
+function selectTrendFit(sectionKey, fitIndex) {
+  selectedTrendFits[sectionKey] = fitIndex;
+  // Destroy just this chart and rebuild
+  if (chartInstances[sectionKey]) { chartInstances[sectionKey].destroy(); delete chartInstances[sectionKey]; }
+  // Re-render the whole trends tab to update table highlighting + chart
+  render();
+}
+
 function destroyCharts() {
   for (const key of Object.keys(chartInstances)) {
     if (chartInstances[key]) { chartInstances[key].destroy(); delete chartInstances[key]; }
@@ -269,9 +303,8 @@ function destroyCharts() {
 function render() {
   destroyCharts();
   const main = document.getElementById('mainContent');
-  const tabs = ['summary','paid','incurred','paid_severity','incurred_severity','trends','indications'];
-  const tabLabels = { summary:'Summary', paid:'Paid Triangle', incurred:'Incurred Triangle',
-    paid_severity:'Paid Severity', incurred_severity:'Incurred Severity', trends:'Trends', indications:'Indications' };
+  const tabs = ['summary','ldf','trends','indications'];
+  const tabLabels = { summary:'Summary', ldf:'LDF', trends:'Trends', indications:'Indications' };
 
   let html = '<div class="tabs">';
   for (const t of tabs) html += `<button class="tab ${t===activeTab?'active':''}" onclick="switchTab('${t}')">${tabLabels[t]}</button>`;
@@ -286,9 +319,10 @@ function switchTab(tab) { activeTab = tab; render(); }
 
 function renderTab(tab) {
   if (tab === 'summary') return renderSummary();
+  if (tab === 'ldf') return renderLdfTab();
   if (tab === 'trends') return renderTrends();
   if (tab === 'indications') return renderIndications();
-  return renderTriangleTab(tab);
+  return '';
 }
 
 function fmt(n, dec=0) { if (n==null) return ''; return n.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec}); }
@@ -393,41 +427,90 @@ function metricLabel(m) {
   return {paid:'Paid Loss',incurred:'Incurred Loss',paid_severity:'Paid Severity',incurred_severity:'Incurred Severity'}[m]||m;
 }
 
-// ── Trends Tab ──
-function renderTrends() {
-  let html = '';
-  const sections = [
-    { key:'loss', title:'Total Loss Trend', yLabel:'Ultimate Losses' },
-    { key:'severity', title:'Severity Trend', yLabel:'Average Severity' },
-    { key:'frequency', title:'Frequency Trend', yLabel:'Claim Frequency' },
-    { key:'premium', title:'Premium Drift Trend', yLabel:'Premium per Policy' },
-  ];
+function toggleLdfMetric(m) {
+  if (activeLdfMetrics.has(m)) { if (activeLdfMetrics.size > 1) activeLdfMetrics.delete(m); }
+  else activeLdfMetrics.add(m);
+  render();
+}
 
-  for (const sec of sections) {
+function toggleTrendMetric(m) {
+  if (activeTrendMetrics.has(m)) { if (activeTrendMetrics.size > 1) activeTrendMetrics.delete(m); }
+  else activeTrendMetrics.add(m);
+  render();
+}
+
+function renderLdfTab() {
+  const allMetrics = [
+    { key:'paid', label:'Paid' },
+    { key:'incurred', label:'Incurred' },
+    { key:'paid_severity', label:'Paid Severity' },
+    { key:'incurred_severity', label:'Incurred Severity' },
+  ];
+  let html = '<div class="toggle-bar">';
+  for (const m of allMetrics) html += `<button class="toggle-pill ${activeLdfMetrics.has(m.key)?'on':''}" onclick="toggleLdfMetric('${m.key}')">${m.label}</button>`;
+  html += '</div>';
+  for (const m of allMetrics) {
+    if (!activeLdfMetrics.has(m.key)) continue;
+    html += renderTriangleTab(m.key);
+  }
+  return html;
+}
+
+// ── Trends Tab ──
+const TREND_SECTIONS = [
+  { key:'loss', title:'Total Loss Trend', yLabel:'Ultimate Losses', toggleLabel:'Loss' },
+  { key:'severity', title:'Severity Trend', yLabel:'Average Severity', toggleLabel:'Severity' },
+  { key:'frequency', title:'Frequency Trend', yLabel:'Claim Frequency', toggleLabel:'Frequency' },
+  { key:'premium', title:'Premium Drift Trend', yLabel:'Premium per Policy', toggleLabel:'Premium' },
+];
+
+function renderTrends() {
+  // Toggle bar
+  let html = '<div class="toggle-bar">';
+  for (const sec of TREND_SECTIONS) html += `<button class="toggle-pill ${activeTrendMetrics.has(sec.key)?'on':''}" onclick="toggleTrendMetric('${sec.key}')">${sec.toggleLabel}</button>`;
+  html += '</div>';
+
+  for (const sec of TREND_SECTIONS) {
+    if (!activeTrendMetrics.has(sec.key)) continue;
     const fits = DATA.trend_fits[sec.key];
     if (!fits) continue;
+
+    // Card wrapper
+    html += '<div class="trend-card">';
     html += `<div class="section-title">${sec.title}</div>`;
     html += `<div class="chart-container"><canvas id="chart_${sec.key}"></canvas></div>`;
 
+    // Determine which fit is currently selected
+    const selIdx = selectedTrendFits[sec.key] != null ? selectedTrendFits[sec.key] : fits.findIndex(f => f.options.window === 'all' && f.options.variant === 'straight');
+    if (selectedTrendFits[sec.key] == null) selectedTrendFits[sec.key] = selIdx >= 0 ? selIdx : 0;
+
+    // Judgmental trend from sidebar inputs
+    const judgmentalMap = {
+      loss: () => (numVal('severity_trend_annual') + numVal('frequency_trend_annual')) / 100,
+      severity: () => numVal('severity_trend_annual') / 100,
+      frequency: () => numVal('frequency_trend_annual') / 100,
+      premium: () => numVal('premium_drift_annual') / 100,
+    };
+    const judgTrend = judgmentalMap[sec.key] ? judgmentalMap[sec.key]() : 0;
+    const judgSel = selectedTrendFits[sec.key] === -1 ? ' class="selected-trend-row"' : '';
+
     html += '<div class="table-wrap"><table><thead><tr><th>Method</th><th>Annual Trend</th><th>R²</th></tr></thead><tbody>';
-    for (const f of fits) {
+    html += `<tr${judgSel} style="cursor:pointer" onclick="selectTrendFit('${sec.key}',-1)"><td>Judgmental</td><td>${fmtPct(judgTrend)}</td><td style="color:#8b90a5">—</td></tr>`;
+    for (let fi = 0; fi < fits.length; fi++) {
+      const f = fits[fi];
       const r2c = f.r_squared>0.9?'color:var(--green)':f.r_squared>0.7?'color:var(--orange)':'color:var(--red)';
-      html += `<tr><td>${f.label}</td><td>${fmtPct(f.annual_trend)}</td><td style="${r2c}">${f.r_squared.toFixed(4)}</td></tr>`;
+      const selClass = fi === selectedTrendFits[sec.key] ? ' class="selected-trend-row"' : '';
+      html += `<tr${selClass} style="cursor:pointer" onclick="selectTrendFit('${sec.key}',${fi})"><td>${f.label}</td><td>${fmtPct(f.annual_trend)}</td><td style="${r2c}">${f.r_squared.toFixed(4)}</td></tr>`;
     }
     html += '</tbody></table></div>';
+    html += '</div>'; // end trend-card
   }
   return html;
 }
 
 function initTrendCharts() {
-  const sections = [
-    { key:'loss', yLabel:'Ultimate Losses' },
-    { key:'severity', yLabel:'Average Severity' },
-    { key:'frequency', yLabel:'Claim Frequency' },
-    { key:'premium', yLabel:'Premium per Policy' },
-  ];
-
-  for (const sec of sections) {
+  for (const sec of TREND_SECTIONS) {
+    if (!activeTrendMetrics.has(sec.key)) continue;
     const canvas = document.getElementById('chart_' + sec.key);
     if (!canvas) continue;
 
@@ -454,7 +537,20 @@ function initTrendCharts() {
     for (let y = minYear; y <= projYear; y++) allYears.push(y);
 
     // Find selected fit (All/straight)
-    const selectedFit = fits.find(f => f.options.window === 'all' && f.options.variant === 'straight') || fits[0];
+    const selIdx = selectedTrendFits[sec.key] != null ? selectedTrendFits[sec.key] : 0;
+    let selectedFit;
+    if (selIdx === -1) {
+      // Judgmental: build a synthetic fit from sidebar inputs
+      const judgmentalMap = {
+        loss: () => (numVal('severity_trend_annual') + numVal('frequency_trend_annual')) / 100,
+        severity: () => numVal('severity_trend_annual') / 100,
+        frequency: () => numVal('frequency_trend_annual') / 100,
+        premium: () => numVal('premium_drift_annual') / 100,
+      };
+      selectedFit = { label: 'Judgmental', annual_trend: judgmentalMap[sec.key]() };
+    } else {
+      selectedFit = fits[selIdx] || fits[0];
+    }
 
     // Predicted value helper: use intercept+slope if available, else derive from annual_trend + actuals
     const predict = (fit, x) => {
@@ -728,7 +824,15 @@ function renderIndications() {
   return html;
 }
 
-window.addEventListener('DOMContentLoaded', () => { runAnalysis(); });
+window.addEventListener('DOMContentLoaded', () => {
+  runAnalysis();
+  // Re-render trends chart when sidebar trend inputs change (for Judgmental selection)
+  for (const id of ['frequency_trend_annual', 'severity_trend_annual', 'premium_drift_annual']) {
+    document.getElementById(id).addEventListener('input', () => {
+      if (DATA && activeTab === 'trends') render();
+    });
+  }
+});
 </script>
 </body>
 </html>
