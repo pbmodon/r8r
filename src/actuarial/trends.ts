@@ -24,6 +24,8 @@ export function fitTrend(
       options,
       annual_trend: 0,
       r_squared: 0,
+      intercept: 0,
+      slope: 0,
     };
   }
 
@@ -52,6 +54,8 @@ export function fitTrend(
       options,
       annual_trend: 0,
       r_squared: 0,
+      intercept: 0,
+      slope: 0,
     };
   }
 
@@ -72,6 +76,8 @@ export function fitTrend(
     options,
     annual_trend: regression.annualTrend,
     r_squared,
+    intercept: regression.intercept,
+    slope: regression.slope,
   };
 }
 

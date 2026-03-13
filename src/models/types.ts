@@ -144,6 +144,10 @@ export interface TrendFitResult {
   options: TrendFitOptions;
   annual_trend: number;
   r_squared: number;
+  /** Regression intercept (on log scale): ln(y) = intercept + slope * x */
+  intercept: number;
+  /** Regression slope (on log scale) */
+  slope: number;
 }
 
 export interface OnLevelFactors {

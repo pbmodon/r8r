@@ -95,6 +95,7 @@ export function simulate(
       policies: policyCount,
       claims: claimCount,
       ultimate_losses: Math.round(yearUltimateLosses),
+      earned_premium: Math.round(totalEarned),
     });
   }
 

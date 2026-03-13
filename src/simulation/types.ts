@@ -90,7 +90,7 @@ export interface SimulationSummary {
   total_policies: number;
   total_claims: number;
   total_claim_snapshots: number;
-  years: { year: number; policies: number; claims: number; ultimate_losses: number }[];
+  years: { year: number; policies: number; claims: number; ultimate_losses: number; earned_premium: number }[];
 }
 
 /** Intermediate: one simulated claim before development snapshots are generated */

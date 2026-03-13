@@ -98,7 +98,7 @@ app.post('/api/analyze', (req, res) => {
       ultimates, simResult.policies, onLevel, indicationInputs
     );
 
-    // 7. Trend fits
+    // 7. Trend fits + raw data for charting
     const annualUltimates = simResult.summary.years.map(y => ({
       year: y.year, value: y.ultimate_losses,
     }));
@@ -109,10 +109,23 @@ app.post('/api/analyze', (req, res) => {
       year: y.year, value: y.claims / y.policies,
     }));
 
+    const premiumPerPolicy = simResult.summary.years.map(y => ({
+      year: y.year, value: y.policies > 0 ? y.earned_premium / y.policies : 0,
+    }));
+
     const trendFits = {
       loss: fitAllTrends(annualUltimates),
       severity: fitAllTrends(severityByYear),
       frequency: fitAllTrends(freqByYear),
+      premium: fitAllTrends(premiumPerPolicy),
+    };
+
+    // Raw data points for chart rendering
+    const trendData = {
+      loss: annualUltimates,
+      severity: severityByYear,
+      frequency: freqByYear,
+      premium: premiumPerPolicy,
     };
 
     res.json({
@@ -127,6 +140,7 @@ app.post('/api/analyze', (req, res) => {
       on_level: onLevel,
       indication,
       trend_fits: trendFits,
+      trend_data: trendData,
       indication_inputs: indicationInputs,
       ldf_method: ldfMethod,
     });
